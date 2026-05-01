@@ -1,179 +1,99 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Gridv21 Permits</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f5f5; color: #111; padding: 16px;
-    }
-   .header {
-      background: #111; color: white; padding: 20px 16px;
-      margin: -16px -16px 16px -16px; position: sticky; top: 0; z-index: 10;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    h1 { font-size: 20px; font-weight: 600; }
-   .add-btn {
-      background: #fff; color: #111; border: none; padding: 8px 14px;
-      border-radius: 8px; font-weight: 600; font-size: 14px;
-    }
-   .filters,.form {
-      background: white; padding: 16px; border-radius: 12px;
-      margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-   .form { display: none; }
-   .form.active { display: block; }
-    input, select, button {
-      width: 100%; padding: 14px; margin: 8px 0;
-      border: 1px solid #ddd; border-radius: 8px; font-size: 16px;
-    }
-    button { background: #111; color: white; font-weight: 600; border: none; }
-    button:active { opacity: 0.8; }
-   .secondary { background: #e5e5e5; color: #111; }
-   .stats { font-size: 14px; color: #666; margin-bottom: 12px; }
-   .card {
-      background: white; padding: 16px; border-radius: 12px;
-      margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-   .card h3 { font-size: 18px; margin-bottom: 8px; }
-   .row { display: flex; justify-content: space-between; margin: 6px 0; }
-   .label { color: #666; font-size: 14px; }
-   .value { font-weight: 500; }
-   .status {
-      display: inline-block; padding: 4px 10px; border-radius: 20px;
-      font-size: 12px; font-weight: 600;
-    }
-   .approved { background: #d1fae5; color: #065f46; }
-   .pending { background: #fef3c7; color: #92400e; }
-   .loading { text-align: center; padding: 40px; color: #666; }
-   .success { background: #d1fae5; color: #065f46; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>Permit Tracker</h1>
-    <button class="add-btn" onclick="toggleForm()">+ Add</button>
-  </div>
+<script>
+  const API = 'https://gridv21-api-3-05s4.onrender.com/v1/permits';
 
-  <div class="form" id="addForm">
-    <h3 style="margin-bottom:12px">New Permit</h3>
-    <input id="newCity" placeholder="City" required>
-    <input id="newType" placeholder="Permit Type" required>
-    <select id="newStatus">
-      <option>Pending</option>
-      <option>Approved</option>
-    </select>
-    <button onclick="addPermit()">Save Permit</button>
-    <button class="secondary" onclick="toggleForm()">Cancel</button>
-  </div>
+  function toggleForm() {
+    document.getElementById('addForm').classList.toggle('active');
+    document.getElementById('msg').innerHTML = '';
+  }
 
-  <div id="msg"></div>
+  async function addPermit() {
+    const city = document.getElementById('newCity').value;
+    const type = document.getElementById('newType').value;
+    const status = document.getElementById('newStatus').value;
 
-  <div class="filters">
-    <input id="cityFilter" placeholder="Search city" enterkeyhint="search">
-    <select id="statusFilter">
-      <option value="">All Status</option>
-      <option value="Approved">Approved</option>
-      <option value="Pending">Pending</option>
-    </select>
-    <button onclick="loadPermits()">Search</button>
-  </div>
-
-  <div class="stats" id="stats"></div>
-  <div id="list"></div>
-
-  <script>
-    const API = 'https://gridv21-api-3-05s4.onrender.com/v1/permits';
-
-    function toggleForm() {
-      document.getElementById('addForm').classList.toggle('active');
-      document.getElementById('msg').innerHTML = '';
+    if (!city ||!type) {
+      alert('City and Type required');
+      return;
     }
 
-    async function addPermit() {
-      const city = document.getElementById('newCity').value;
-      const type = document.getElementById('newType').value;
-      const status = document.getElementById('newStatus').value;
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          city: city,
+          permit_type: type,
+          status: status,
+          issued_date: new Date().toISOString().split('T')[0]
+        })
+      });
 
-      if (!city ||!type) {
-        alert('City and Type required');
+      if (res.ok) {
+        document.getElementById('msg').innerHTML = '<div class="success">Permit added!</div>';
+        document.getElementById('newCity').value = '';
+        document.getElementById('newType').value = '';
+        toggleForm();
+        loadPermits();
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save');
+      }
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function loadPermits() {
+    const city = document.getElementById('cityFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    document.getElementById('list').innerHTML = '<div class="loading">Loading...</div>';
+
+    let url = API + '?';
+    if (city) url += `city=${encodeURIComponent(city)}&`;
+    if (status) url += `status=${encodeURIComponent(status)}&`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+
+      const result = await res.json();
+
+      // Handle both {count, data} or just array
+      const data = result.data || result;
+      const count = result.count || data.length;
+
+      document.getElementById('stats').innerHTML = `${count} permits found`;
+
+      if (count === 0 ||!data) {
+        document.getElementById('list').innerHTML = '<div class="loading">No permits found</div>';
         return;
       }
 
-      try {
-        const res = await fetch(API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            city: city,
-            permit_type: type,
-            status: status,
-            issued_date: new Date().toISOString().split('T')[0]
-          })
-        });
-
-        if (res.ok) {
-          document.getElementById('msg').innerHTML = '<div class="success">Permit added!</div>';
-          document.getElementById('newCity').value = '';
-          document.getElementById('newType').value = '';
-          toggleForm();
-          loadPermits();
-        } else {
-          throw new Error('Failed to save');
-        }
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-
-    async function loadPermits() {
-      const city = document.getElementById('cityFilter').value;
-      const status = document.getElementById('statusFilter').value;
-      document.getElementById('list').innerHTML = '<div class="loading">Loading...</div>';
-
-      let url = API + '?';
-      if (city) url += `city=${city}&`;
-      if (status) url += `status=${status}&`;
-
-      try {
-        const res = await fetch(url);
-        const { count, data } = await res.json();
-        document.getElementById('stats').innerHTML = `${count} permits found`;
-
-        if (count === 0) {
-          document.getElementById('list').innerHTML = '<div class="loading">No permits found</div>';
-          return;
-        }
-
-        document.getElementById('list').innerHTML = data.map(p => `
-          <div class="card">
-            <h3>${p.city || 'Unknown City'}</h3>
-            <div class="row">
-              <span class="label">Type</span>
-              <span class="value">${p.permit_type || '-'}</span>
-            </div>
-            <div class="row">
-              <span class="label">Status</span>
-              <span class="status ${p.status?.toLowerCase()}">${p.status || '-'}</span>
-            </div>
-            <div class="row">
-              <span class="label">Issued</span>
-              <span class="value">${p.issued_date? new Date(p.issued_date).toLocaleDateString() : '-'}</span>
-            </div>
+      document.getElementById('list').innerHTML = data.map(p => `
+        <div class="card">
+          <h3>${p.city || 'Unknown City'}</h3>
+          <div class="row">
+            <span class="label">Type</span>
+            <span class="value">${p.permit_type || '-'}</span>
           </div>
-        `).join('');
-      } catch (err) {
-        document.getElementById('list').innerHTML = `<div class="loading">Error: ${err.message}</div>`;
-      }
+          <div class="row">
+            <span class="label">Status</span>
+            <span class="status ${p.status?.toLowerCase()}">${p.status || '-'}</span>
+          </div>
+          <div class="row">
+            <span class="label">Issued</span>
+            <span class="value">${p.issued_date? new Date(p.issued_date).toLocaleDateString() : '-'}</span>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      document.getElementById('stats').innerHTML = 'Error';
+      document.getElementById('list').innerHTML = `<div class="loading">Error: ${err.message}<br><br>Check Render logs. API might be sleeping.</div>`;
     }
+  }
 
-    loadPermits();
-    document.getElementById('cityFilter').addEventListener('keyup', e => {
-      if (e.key === 'Enter') loadPermits();
-    });
-  </script>
-</body>
-  </html>
+  loadPermits();
+  document.getElementById('cityFilter').addEventListener('keyup', e => {
+    if (e.key === 'Enter') loadPermits();
+  });
+          </script>
